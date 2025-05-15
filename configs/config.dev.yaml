@@ -1,0 +1,22 @@
+server:
+  port: 8080
+  readTimeout: 15
+  writeTimeout: 15
+
+redis:
+  address: "redis:6379"
+  password: "devpass"
+  db: 0
+  poolSize: 200
+  channels:
+    inbound: "dev:ws:inbound"
+    outbound: "dev:ws:outbound"
+    system: "dev:ws:system"
+    connection: "dev:ws:connections"
+
+websocket:
+  maxConnections: 10000
+  messageSizeLimit: 4096
+  pingInterval: 25
+  reconnectBackoff: 500
+  maxRetries: 3

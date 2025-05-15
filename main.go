@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/abdelmounim-dev/websocket-pooler/broker"
+	"github.com/abdelmounim-dev/websocket-pooler/config"
 	"github.com/abdelmounim-dev/websocket-pooler/server"
 	"github.com/abdelmounim-dev/websocket-pooler/websocket"
 )
@@ -17,8 +18,11 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// config
+	cfg := config.Get()
+
 	// Create message broker
-	messageBroker, err := broker.NewRedisBroker("localhost:6379")
+	messageBroker, err := broker.NewRedisBroker(cfg.Redis.Address)
 	if err != nil {
 		log.Fatalf("Failed to create Redis broker: %v", err)
 	}
