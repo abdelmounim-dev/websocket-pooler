@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
@@ -20,6 +21,7 @@ func NewServer(addr string, wsHandler http.HandlerFunc) *Server {
 	// Register handlers
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", wsHandler)
+	mux.HandleFunc("/health", HandleHealth)
 
 	// Create server
 	srv := &http.Server{
@@ -77,4 +79,10 @@ func (s *Server) Shutdown(ctx context.Context, clientManager *websocket.ClientMa
 	}
 
 	log.Println("Shutdown complete")
+}
+
+// Add health endpoint
+func HandleHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "healthy"})
 }

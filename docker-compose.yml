@@ -7,6 +7,8 @@ services:
       - "6379:6379"
     networks:
       - websocket-net
+    # command: >
+    #   --requirepass devpass
 
   # pooler:
   #   build: ./pooler

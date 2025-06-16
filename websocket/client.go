@@ -9,7 +9,6 @@ import (
 	"github.com/abdelmounim-dev/websocket-pooler/config"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/gorilla/websocket"
-	"golang.org/x/sys/unix"
 )
 
 const (

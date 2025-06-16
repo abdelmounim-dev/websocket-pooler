@@ -4,7 +4,7 @@ server:
   writeTimeout: 15
 
 redis:
-  address: "redis:6379"
+  address: "localhost:6379"
   password: "devpass"
   db: 0
   poolSize: 200

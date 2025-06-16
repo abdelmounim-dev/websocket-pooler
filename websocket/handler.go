@@ -9,6 +9,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/abdelmounim-dev/websocket-pooler/broker"
+	"github.com/abdelmounim-dev/websocket-pooler/config"
 )
 
 // Constants for channel names
@@ -48,7 +49,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	clientID := uuid.New().String()
 
 	// Create a new client session
-	session := NewClientSession(clientID, conn)
+	session := NewClientSession(clientID, conn, &config.Get().WebSocket)
 
 	// Add client to manager
 	h.manager.AddClient(clientID, session)

@@ -23,8 +23,9 @@ type RedisBroker struct {
 }
 
 // NewRedisBroker creates a new Redis message broker
-func NewRedisBroker(addr string) (*RedisBroker, error) {
-	client := redis.NewClient(&redis.Options{Addr: addr})
+func NewRedisBroker(addr string, password string) (*RedisBroker, error) {
+	options := &redis.Options{Addr: addr, Password: password}
+	client := redis.NewClient(options)
 
 	// Test connection
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

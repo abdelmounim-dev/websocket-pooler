@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/abdelmounim-dev/websocket-pooler/broker"
@@ -18,11 +19,18 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// config
+	// Initialize config
+	env := os.Getenv("ENVIRONMENT")
+	if env == "" {
+		env = "dev"
+	}
+	if err := config.Initialize(env); err != nil {
+		log.Fatalf("Failed to initialize config: %v", err)
+	}
 	cfg := config.Get()
 
 	// Create message broker
-	messageBroker, err := broker.NewRedisBroker(cfg.Redis.Address)
+	messageBroker, err := broker.NewRedisBroker(cfg.Redis.Address, cfg.Redis.Password)
 	if err != nil {
 		log.Fatalf("Failed to create Redis broker: %v", err)
 	}
@@ -35,14 +43,15 @@ func main() {
 	handler := websocket.NewHandler(clientManager, messageBroker)
 
 	// Create and configure server
-	srv := server.NewServer(":8080", handler.HandleWebSocket)
+	port := ":" + strconv.Itoa(cfg.Server.Port)
+	srv := server.NewServer(port, handler.HandleWebSocket)
 
 	// Start message listener
 	go handler.ListenForResponses(ctx)
 
 	// Start server
 	go srv.Start()
-	log.Println("WebSocket pooler started on :8080")
+	log.Println("WebSocket pooler started on " + port)
 
 	// Wait for shutdown signal
 	sigChan := make(chan os.Signal, 1)
