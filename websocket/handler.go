@@ -2,6 +2,8 @@ package websocket
 
 import (
 	"context"
+	"errors"
+	"net"
 	"net/http"
 	"time"
 
@@ -50,6 +52,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Create a new client session
 	session := NewClientSession(clientID, conn, &config.Get().WebSocket)
+	session.StartTimers()
 
 	// Add client to manager
 	h.manager.AddClient(clientID, session)
@@ -84,7 +87,10 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, msg, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("Read error from client %s: %v", clientID, err)
+			if !websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) &&
+				!errors.Is(err, net.ErrClosed) {
+				log.Printf("Read error from client %s: %v", clientID, err)
+			}
 			break
 		}
 

@@ -5,7 +5,7 @@ server:
 
 redis:
   address: "localhost:6379"
-  password: "devpass"
+  password: ""
   db: 0
   poolSize: 200
   channels:

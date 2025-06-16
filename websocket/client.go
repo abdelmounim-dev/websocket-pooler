@@ -64,9 +64,21 @@ func (s *ClientSession) SafeWriteJSON(data interface{}) error {
 	})
 }
 
-// UpdateActivity updates the last activity timestamp
+// UpdateActivity updates the last activity timestamp and resets the timeout timer
 func (s *ClientSession) UpdateActivity() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.lastActivity.Store(time.Now().Unix())
+
+	// Reset the activity timer
+	if s.activityTimer != nil {
+		s.activityTimer.Stop()
+		s.activityTimer = time.AfterFunc(
+			time.Duration(s.cfg.ActivityTimeout)*time.Second,
+			s.onActivityTimeout,
+		)
+	}
 }
 
 // LastActivityTime returns the time of last activity
@@ -75,6 +87,9 @@ func (s *ClientSession) LastActivityTime() time.Time {
 }
 
 func (s *ClientSession) StartTimers() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.activityTimer = time.AfterFunc(
 		time.Duration(s.cfg.ActivityTimeout)*time.Second,
 		s.onActivityTimeout,
@@ -106,7 +121,7 @@ func (s *ClientSession) pingLoop() {
 
 func (s *ClientSession) onActivityTimeout() {
 	log.Printf("Connection %s timed out", s.ID)
-	s.Close(websocket.ClosePolicyViolation, "Inactivity timeout")
+	s.Close(websocket.CloseMessage, "Inactivity timeout")
 }
 
 func (s *ClientSession) SendPing() error {
@@ -168,6 +183,19 @@ func (s *ClientSession) StartActivityChecker(ctx context.Context, onTimeout func
 func (s *ClientSession) Close(code int, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// stop timers
+	if s.pingTicker != nil {
+		s.pingTicker.Stop()
+	}
+	if s.activityTimer != nil {
+		s.activityTimer.Stop()
+	}
+
+	// cancel context
+	if s.cancel != nil {
+		s.cancel()
+	}
 
 	err := s.conn.WriteControl(
 		websocket.CloseMessage,
