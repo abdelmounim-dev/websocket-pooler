@@ -17,6 +17,8 @@ redis:
 websocket:
   maxConnections: 10000
   messageSizeLimit: 4096
-  pingInterval: 25
+  pingInterval: 5
   reconnectBackoff: 500
   maxRetries: 3
+  activityTimeout: 10
+  keepAlive: true

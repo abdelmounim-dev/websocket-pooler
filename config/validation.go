@@ -31,6 +31,10 @@ func (c *AppConfig) Validate() error {
 		return errors.New("ping interval should be less than activity timeout")
 	}
 
+	if c.WebSocket.SessionTTL <= c.WebSocket.ActivityTimeout {
+		return errors.New("session TTL should be greater than activity timeout")
+	}
+
 	return nil
 }
 
@@ -51,4 +55,5 @@ func bindEnvVars() {
 	viper.BindEnv("websocket.pongTimeout", "WSGATEWAY_PONG_TIMEOUT")
 	viper.BindEnv("websocket.activityTimeout", "WSGATEWAY_ACTIVITY_TIMEOUT")
 	viper.BindEnv("websocket.writeTimeout", "WSGATEWAY_WRITE_TIMEOUT")
+	viper.BindEnv("websocket.sessionTTL", "WSGATEWAY_SESSION_TTL")
 }

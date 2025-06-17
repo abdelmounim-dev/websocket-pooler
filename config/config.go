@@ -45,6 +45,8 @@ type WebSocketConfig struct {
 	WriteTimeout     int // Seconds
 	ReconnectBackoff int // Milliseconds
 	MaxRetries       int
+	KeepAlive        bool
+	SessionTTL       int // Seconds
 }
 
 type Timeouts struct {

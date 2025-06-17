@@ -7,11 +7,15 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/abdelmounim-dev/websocket-pooler/broker"
 	"github.com/abdelmounim-dev/websocket-pooler/config"
 	"github.com/abdelmounim-dev/websocket-pooler/server"
+	"github.com/abdelmounim-dev/websocket-pooler/services"
+	"github.com/abdelmounim-dev/websocket-pooler/session"
 	"github.com/abdelmounim-dev/websocket-pooler/websocket"
+	"github.com/google/uuid"
 )
 
 func main() {
@@ -28,6 +32,19 @@ func main() {
 		log.Fatalf("Failed to initialize config: %v", err)
 	}
 	cfg := config.Get()
+	// Generate a unique ID for this server instance
+	serverID := uuid.New().String()
+	log.Printf("Starting server instance with ID: %s", serverID)
+
+	// TODO: separate Redis client creation and session store initialization and broker in some way make client singleton
+	// Create Redis Client
+	redisClient, err := services.NewRedisClient(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB, cfg.Redis.PoolSize, cfg.Redis.PoolTimeout)
+	if err != nil {
+		log.Fatalf("Failed to create Redis client: %v", err)
+	}
+
+	// Create session store
+	sessionStore := session.NewRedisStore(redisClient, time.Duration(cfg.WebSocket.SessionTTL)*time.Second)
 
 	// Create message broker
 	messageBroker, err := broker.NewRedisBroker(cfg.Redis.Address, cfg.Redis.Password)
@@ -37,7 +54,7 @@ func main() {
 	defer messageBroker.Close()
 
 	// Create client manager
-	clientManager := websocket.NewClientManager()
+	clientManager := websocket.NewClientManager(sessionStore, serverID)
 
 	// Initialize handlers
 	handler := websocket.NewHandler(clientManager, messageBroker)

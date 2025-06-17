@@ -12,9 +12,6 @@ import (
 )
 
 const (
-	pingInterval        = 30 * time.Second
-	activityTimeout     = 60 * time.Second
-	writeWait           = 5 * time.Second
 	websocketRetryDelay = 200 * time.Millisecond
 )
 
@@ -65,6 +62,7 @@ func (s *ClientSession) SafeWriteJSON(data interface{}) error {
 }
 
 // UpdateActivity updates the last activity timestamp and resets the timeout timer
+// This should only be called for actual client messages, not pong responses
 func (s *ClientSession) UpdateActivity() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -83,7 +81,7 @@ func (s *ClientSession) UpdateActivity() {
 
 // LastActivityTime returns the time of last activity
 func (s *ClientSession) LastActivityTime() time.Time {
-	return time.Unix(0, s.lastActivity.Load())
+	return time.Unix(s.lastActivity.Load(), 0)
 }
 
 func (s *ClientSession) StartTimers() {
@@ -95,10 +93,10 @@ func (s *ClientSession) StartTimers() {
 		s.onActivityTimeout,
 	)
 
+	// Remove ping mechanism if you want pure inactivity timeout
 	s.pingTicker = time.NewTicker(
 		time.Duration(s.cfg.PingInterval) * time.Second,
 	)
-
 	go s.pingLoop()
 }
 
@@ -121,18 +119,12 @@ func (s *ClientSession) pingLoop() {
 
 func (s *ClientSession) onActivityTimeout() {
 	log.Printf("Connection %s timed out", s.ID)
-	s.Close(websocket.CloseMessage, "Inactivity timeout")
+	s.Close(websocket.ClosePolicyViolation, "Inactivity timeout")
 }
 
 func (s *ClientSession) SendPing() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	_, cancel := context.WithTimeout(
-		context.Background(),
-		time.Duration(s.cfg.WriteTimeout)*time.Second,
-	)
-	defer cancel()
 
 	return s.conn.WriteControl(
 		websocket.PingMessage,
@@ -141,41 +133,27 @@ func (s *ClientSession) SendPing() error {
 	)
 }
 
-// StartPingSender begins sending ping messages to keep the connection alive
-func (s *ClientSession) StartPingSender(ctx context.Context) {
-	ticker := time.NewTicker(pingInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			s.conn.WriteControl(
-				websocket.PingMessage,
-				nil,
-				time.Now().Add(writeWait),
-			)
-		case <-ctx.Done():
-			return
-		}
-	}
+// UpdateLastSeen updates only the timestamp (for pong responses)
+// Does NOT reset the activity timer
+func (s *ClientSession) UpdateLastSeen() {
+	s.lastActivity.Store(time.Now().Unix())
 }
 
-// StartActivityChecker monitors the connection for timeouts
-func (s *ClientSession) StartActivityChecker(ctx context.Context, onTimeout func()) {
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			if time.Since(s.LastActivityTime()) > activityTimeout {
-				s.conn.Close()
-				onTimeout()
-				return
-			}
-		case <-ctx.Done():
-			return
+// GetPongHandler returns a pong handler function based on configuration
+func (s *ClientSession) GetPongHandler() func(string) error {
+	return func(msg string) error {
+		if s.cfg.KeepAlive {
+			s.UpdateActivity() // Reset timeout timer
+		} else {
+			s.UpdateLastSeen() // Just update timestamp
 		}
+
+		// Optional: log pong messages (consider removing in production)
+		if len(msg) > 0 {
+			log.Printf("Pong received from client %s: %s", s.ID, msg)
+		}
+
+		return nil
 	}
 }
 
@@ -184,7 +162,7 @@ func (s *ClientSession) Close(code int, text string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// stop timers
+	// Stop timers
 	if s.pingTicker != nil {
 		s.pingTicker.Stop()
 	}
@@ -192,21 +170,20 @@ func (s *ClientSession) Close(code int, text string) error {
 		s.activityTimer.Stop()
 	}
 
-	// cancel context
+	// Cancel context
 	if s.cancel != nil {
 		s.cancel()
 	}
 
+	writeTimeout := time.Duration(s.cfg.WriteTimeout) * time.Second
 	err := s.conn.WriteControl(
 		websocket.CloseMessage,
 		websocket.FormatCloseMessage(code, text),
-		time.Now().Add(writeWait),
+		time.Now().Add(writeTimeout),
 	)
 	if err != nil {
 		log.Printf("Error sending close message: %v", err)
-		return err
 	}
 
-	// Close the connection regardless of whether the close message was sent
 	return s.conn.Close()
 }

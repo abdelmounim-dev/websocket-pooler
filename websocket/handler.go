@@ -54,32 +54,23 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	session := NewClientSession(clientID, conn, &config.Get().WebSocket)
 	session.StartTimers()
 
-	// Add client to manager
-	h.manager.AddClient(clientID, session)
+	// Add client to manager (which handles in-memory and persistent storage)
+	if err := h.manager.AddClient(r.Context(), session); err != nil {
+		conn.Close()
+		return
+	}
+
+	// Defer cleanup for when this function returns (i.e., connection closes)
+	defer h.manager.RemoveClient(clientID)
 
 	// Configure pong handler
-	conn.SetPongHandler(func(string) error {
-		session.UpdateActivity()
-		return nil
-	})
-
-	// Create a context for this connection
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	// Start connection monitoring
-	go session.StartPingSender(ctx)
-	go session.StartActivityChecker(ctx, func() {
-		log.Printf("Connection timeout for client %s", clientID)
-		h.manager.RemoveClient(clientID)
-		cancel()
-	})
+	conn.SetPongHandler(session.GetPongHandler())
 
 	// Send client ID to client
 	if err := session.SafeWriteJSON(map[string]string{"client_id": clientID}); err != nil {
 		log.Printf("Failed to send client ID: %v", err)
 		conn.Close()
-		h.manager.RemoveClient(clientID)
+		// defer will handle the cleanup
 		return
 	}
 
@@ -94,28 +85,31 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		// Update activity timestamp
+		// Update activity timestamp on the client session
 		session.UpdateActivity()
+
+		// Refresh session TTL in Redis
+		h.manager.RefreshSessionTTL(r.Context(), clientID)
 
 		// Forward message to backend
 		h.manager.IncreaseWaitGroup()
 		go func() {
 			defer h.manager.DecreaseWaitGroup()
 
-			ctxTimeout, cancel := context.WithTimeout(ctx, 10*time.Second)
+			ctxTimeout, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
 
+			// The message broker needs the serverID
 			if err := h.broker.Publish(ctxTimeout, BackendRequestsChannel, broker.Message{
 				ClientID: clientID,
+				ServerID: h.manager.serverID, // Get serverID from manager
 				Data:     string(msg),
 			}); err != nil {
 				log.Printf("Failed to publish message for client %s: %v", clientID, err)
 			}
 		}()
 	}
-
-	// Clean up when connection ends
-	h.manager.RemoveClient(clientID)
+	// No explicit cleanup here, defer handles it.
 }
 
 // ListenForResponses listens for messages from backend and routes them to clients
@@ -133,6 +127,11 @@ func (h *Handler) ListenForResponses(ctx context.Context) {
 			if !ok {
 				log.Println("Backend response channel closed")
 				return
+			}
+
+			// Only process messages destined for this server instance
+			if message.ServerID != h.manager.serverID {
+				continue
 			}
 
 			clientID := message.ClientID
