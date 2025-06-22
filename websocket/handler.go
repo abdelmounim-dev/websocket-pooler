@@ -14,6 +14,7 @@ import (
 
 	"github.com/abdelmounim-dev/websocket-pooler/broker"
 	"github.com/abdelmounim-dev/websocket-pooler/config"
+	"github.com/abdelmounim-dev/websocket-pooler/metrics"
 )
 
 // Constants for channel names
@@ -117,6 +118,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 			break
 		}
+		metrics.MessagesReceived.Inc()
 		session.UpdateActivity()
 
 		// --- Channel Access Control ---
@@ -148,6 +150,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			ctxTimeout, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
 			if err := h.broker.Publish(ctxTimeout, BackendRequestsChannel, broker.Message{
+
 				ClientID: clientID,
 				ServerID: h.manager.serverID,
 				Data:     string(msg),
@@ -155,6 +158,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				log.Printf("Failed to publish message for client %s: %v", clientID, err)
 			}
 		}()
+		metrics.BrokerMessagesPublished.WithLabelValues(h.broker.Type()).Inc()
 	}
 }
 
@@ -183,6 +187,7 @@ func (h *Handler) ListenForResponses(ctx context.Context) {
 			clientID := message.ClientID
 
 			if session, ok := h.manager.GetClient(clientID); ok {
+				metrics.MessagesSent.Inc()
 				if err := session.SafeWriteJSON(message.Data); err != nil {
 					log.Printf("Failed to send message to client %s: %v", clientID, err)
 					session.Close(websocket.CloseInternalServerErr, "Failed to send message")

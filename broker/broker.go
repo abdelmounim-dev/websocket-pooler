@@ -23,4 +23,7 @@ type MessageBroker interface {
 
 	// Close cleans up resources
 	Close() error
+
+	// Type returns the type of the broker (e.g., "redis", "kafka")
+	Type() string
 }

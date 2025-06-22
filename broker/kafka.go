@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"github.com/abdelmounim-dev/websocket-pooler/metrics"
 	"sync"
 	"time"
 
@@ -118,6 +119,11 @@ func (b *KafkaBroker) Publish(ctx context.Context, channel string, message Messa
 	return backoff.RetryNotify(operation, backoffStrategy, func(err error, d time.Duration) {
 		log.Printf("Retrying Kafka publish for %s: %v (next attempt in %s)", message.ClientID, err, d)
 	})
+}
+
+// Type returns the broker type.
+func (b *KafkaBroker) Type() string {
+	return "kafka"
 }
 
 // Subscribe starts listening for messages on the specified channel (topic)

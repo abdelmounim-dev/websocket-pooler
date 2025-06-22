@@ -2,9 +2,11 @@ package websocket
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/abdelmounim-dev/websocket-pooler/config"
+	"github.com/abdelmounim-dev/websocket-pooler/metrics"
 	"github.com/go-redis/redis/v8"
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -43,6 +45,13 @@ func (v *JWTValidator) ValidateToken(ctx context.Context, tokenString string) (*
 
 	if err != nil {
 		// This handles parsing errors, signature validation errors, and expired tokens.
+		var reason string
+		if errors.Is(err, jwt.ErrTokenExpired) {
+			reason = "expired"
+		} else {
+			reason = "invalid_signature"
+		}
+		metrics.AuthFailures.WithLabelValues(reason).Inc()
 		return nil, fmt.Errorf("token parse/validation error: %w", err)
 	}
 
@@ -62,8 +71,11 @@ func (v *JWTValidator) ValidateToken(ctx context.Context, tokenString string) (*
 		log.Printf("CRITICAL: Failed to check token revocation status: %v", err)
 	}
 	if isRevoked {
+		metrics.AuthFailures.WithLabelValues("revoked").Inc()
 		return nil, fmt.Errorf("token has been revoked")
 	}
+
+	metrics.AuthSuccess.Inc()
 
 	return claims, nil
 }

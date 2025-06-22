@@ -34,19 +34,23 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
-  # pooler:
-  #   build: .
-  #   ports:
-  #     - "8080:8080"
-  #   depends_on:
-  #     - redis
-  #     - kafka
-  #   networks:
-  #     - websocket-net
-  #   environment:
+  pooler:
+    build: .
+    ports:
+      - "8080:8080" # Main websocket port
+      - "9090:9090" # Metrics port
+    depends_on:
+      - redis
+      - kafka
+    networks:
+      - websocket-net
+    environment:
       # --- Option 1: Use Redis as the broker ---
       # WSGATEWAY_BROKER_TYPE: "redis"
       # WSGATEWAY_REDIS_ADDRESS: "redis:6379"
+
+      WSGATEWAY_BROKER_TYPE: "redis"
+      WSGATEWAY_REDIS_ADDRESS: "redis:6379"
 
       # --- Option 2: Use Kafka as the broker ---
       # NOTE: The session store will still use Redis.
@@ -54,13 +58,34 @@ services:
       # WSGATEWAY_KAFKA_BROKERS: "kafka:29092"
       # WSGATEWAY_REDIS_ADDRESS: "redis:6379" # For session store
 
-  # backend:
-  #   build: ./backend
-  #   depends_on:
-  #     - redis
-  #     - kafka
-  #   networks:
-  #     - websocket-net
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    ports:
+      - "9090:9090"
+    networks:
+      - websocket-net
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning/:/etc/grafana/provisioning/
+      - ./grafana/dashboards/:/var/lib/grafana/dashboards/
+    networks:
+      - websocket-net
+
+  backend:
+    build: ./backend
+    depends_on:
+      - redis
+      - kafka
+    networks:
+      - websocket-net
 
 networks:
   websocket-net:

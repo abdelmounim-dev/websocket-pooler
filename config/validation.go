@@ -58,6 +58,10 @@ func (c *AppConfig) Validate() error {
 		return errors.New("session TTL should be greater than activity timeout")
 	}
 
+	if c.Metrics.Enabled && (c.Metrics.Port < 1 || c.Metrics.Port > 65535) {
+		return errors.New("invalid metrics server port")
+	}
+
 	return nil
 }
 
@@ -88,4 +92,9 @@ func bindEnvVars() {
 	viper.BindEnv("websocket.activityTimeout", "WSGATEWAY_ACTIVITY_TIMEOUT")
 	viper.BindEnv("websocket.writeTimeout", "WSGATEWAY_WRITE_TIMEOUT")
 	viper.BindEnv("websocket.sessionTTL", "WSGATEWAY_SESSION_TTL")
+
+	// Metrics
+	viper.BindEnv("metrics.enabled", "WSGATEWAY_METRICS_ENABLED")
+	viper.BindEnv("metrics.port", "WSGATEWAY_METRICS_PORT")
+	viper.BindEnv("metrics.path", "WSGATEWAY_METRICS_PATH")
 }

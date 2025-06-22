@@ -3,6 +3,11 @@ server:
   readTimeout: 15
   writeTimeout: 15
 
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+
 auth:
   enabled: false
   # IMPORTANT: Use a strong, randomly generated secret and manage it securely (e.g., via environment variables or a vault).

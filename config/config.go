@@ -12,6 +12,13 @@ type AppConfig struct {
 	Broker    BrokerConfig // Changed from Redis to Broker
 	WebSocket WebSocketConfig
 	Auth      AuthConfig
+	Metrics   MetricsConfig
+}
+
+type MetricsConfig struct {
+	Enabled bool
+	Port    int
+	Path    string
 }
 
 type AuthConfig struct {

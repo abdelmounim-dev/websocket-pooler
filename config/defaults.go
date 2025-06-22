@@ -38,4 +38,9 @@ func setDefaults() {
 	viper.SetDefault("websocket.writeTimeout", 5)
 	viper.SetDefault("websocket.keepAlive", true)
 	viper.SetDefault("websocket.sessionTTL", 90)
+
+	// Metrics
+	viper.SetDefault("metrics.enabled", true)
+	viper.SetDefault("metrics.port", 9090)
+	viper.SetDefault("metrics.path", "/metrics")
 }

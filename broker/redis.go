@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"github.com/abdelmounim-dev/websocket-pooler/metrics"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -27,6 +28,11 @@ func NewRedisBroker(client *redis.Client) MessageBroker {
 	return &RedisBroker{
 		client: client,
 	}
+}
+
+// Type returns the broker type.
+func (b *RedisBroker) Type() string {
+	return "redis"
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler interface
@@ -57,6 +63,7 @@ func (b *RedisBroker) Publish(ctx context.Context, channel string, message Messa
 	)
 
 	return backoff.RetryNotify(operation, backoffStrategy, func(err error, d time.Duration) {
+		metrics.BrokerPublishRetries.WithLabelValues(b.Type()).Inc()
 		log.Printf("Retrying Redis publish for %s: %v (next attempt in %s)", message.ClientID, err, d)
 	})
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/abdelmounim-dev/websocket-pooler/broker"
 	"github.com/abdelmounim-dev/websocket-pooler/config"
 	"github.com/abdelmounim-dev/websocket-pooler/server"
+	"github.com/abdelmounim-dev/websocket-pooler/metrics"
 	"github.com/abdelmounim-dev/websocket-pooler/session"
 	"github.com/abdelmounim-dev/websocket-pooler/websocket"
 	"github.com/go-redis/redis/v8"
@@ -33,6 +34,11 @@ func main() {
 		log.Fatalf("Failed to initialize config: %v", err)
 	}
 	cfg := config.Get()
+
+	// Initialize and start metrics server
+	if cfg.Metrics.Enabled {
+		metrics.StartServer(cfg.Metrics.Port, cfg.Metrics.Path)
+	}
 
 	// Generate a unique ID for this server instance
 	serverID := uuid.New().String()

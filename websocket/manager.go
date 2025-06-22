@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/abdelmounim-dev/websocket-pooler/metrics"
 	"github.com/abdelmounim-dev/websocket-pooler/session"
 	"github.com/gorilla/websocket"
 )
@@ -43,6 +44,8 @@ func (m *ClientManager) AddClient(ctx context.Context, clientSession *ClientSess
 
 	// If successful, store the live connection in the local map
 	m.clients.Store(clientSession.ID, clientSession)
+	metrics.ActiveConnections.Inc()
+	metrics.TotalConnections.Inc()
 	log.Printf("Client %s connected to server %s", clientSession.ID, m.serverID)
 	return nil
 }
@@ -57,6 +60,7 @@ func (m *ClientManager) RemoveClient(clientID string) {
 	if err := m.sessionStore.Delete(context.Background(), clientID); err != nil {
 		log.Printf("Failed to delete session from store for client %s: %v", clientID, err)
 	}
+	metrics.ActiveConnections.Dec()
 	log.Printf("Client %s disconnected", clientID)
 }
 
