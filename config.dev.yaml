@@ -3,16 +3,21 @@ server:
   readTimeout: 15
   writeTimeout: 15
 
-redis:
-  address: "localhost:6379"
-  password: ""
-  db: 0
-  poolSize: 200
-  channels:
-    inbound: "dev:ws:inbound"
-    outbound: "dev:ws:outbound"
-    system: "dev:ws:system"
-    connection: "dev:ws:connections"
+broker:
+  type: "redis"
+  redis:
+    address: "localhost:6379"
+    password: ""
+    db: 0
+    poolSize: 200
+    channels:
+      inbound: "dev:ws:inbound"
+      outbound: "dev:ws:outbound"
+      system: "dev:ws:system"
+      connection: "dev:ws:connections"
+  kafka:
+    brokers: ["localhost:9092"]
+    groupID: "websocket-pooler"
 
 websocket:
   maxConnections: 10000

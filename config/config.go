@@ -9,7 +9,7 @@ import (
 
 type AppConfig struct {
 	Server    ServerConfig
-	Redis     RedisConfig
+	Broker    BrokerConfig // Changed from Redis to Broker
 	WebSocket WebSocketConfig
 }
 
@@ -19,6 +19,13 @@ type ServerConfig struct {
 	WriteTimeout int
 }
 
+// BrokerConfig holds settings for the message broker choice
+type BrokerConfig struct {
+	Type  string
+	Redis RedisConfig
+	Kafka KafkaConfig
+}
+
 type RedisConfig struct {
 	Address     string
 	Password    string
@@ -26,6 +33,11 @@ type RedisConfig struct {
 	Channels    RedisChannels
 	PoolSize    int
 	PoolTimeout int
+}
+
+type KafkaConfig struct {
+	Brokers []string
+	GroupID string
 }
 
 type RedisChannels struct {

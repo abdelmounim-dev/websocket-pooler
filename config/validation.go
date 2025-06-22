@@ -2,6 +2,8 @@ package config
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -11,16 +13,28 @@ func (c *AppConfig) Validate() error {
 		return errors.New("invalid server port")
 	}
 
-	if c.Redis.Address == "" {
-		return errors.New("redis address must be specified")
+	// Validate broker configuration
+	switch strings.ToLower(c.Broker.Type) {
+	case "redis":
+		if c.Broker.Redis.Address == "" {
+			return errors.New("redis address must be specified for redis broker")
+		}
+		if c.Broker.Redis.Channels.Inbound == "" || c.Broker.Redis.Channels.Outbound == "" {
+			return errors.New("redis channels must be configured for redis broker")
+		}
+	case "kafka":
+		if len(c.Broker.Kafka.Brokers) == 0 {
+			return errors.New("kafka brokers must be specified for kafka broker")
+		}
+		if c.Broker.Kafka.GroupID == "" {
+			return errors.New("kafka groupID must be specified for kafka broker")
+		}
+	default:
+		return fmt.Errorf("invalid broker type: %s. Must be 'redis' or 'kafka'", c.Broker.Type)
 	}
 
 	if c.WebSocket.MaxConnections < 1 {
 		return errors.New("max connections must be positive")
-	}
-
-	if c.Redis.Channels.Inbound == "" || c.Redis.Channels.Outbound == "" {
-		return errors.New("redis channels must be configured")
 	}
 
 	if c.WebSocket.HandshakeTimeout < 1 {
@@ -42,11 +56,14 @@ func bindEnvVars() {
 	// Server
 	viper.BindEnv("server.port", "WSGATEWAY_PORT")
 
-	// Redis
-	viper.BindEnv("redis.address", "WSGATEWAY_REDIS_ADDRESS")
-	viper.BindEnv("redis.password", "WSGATEWAY_REDIS_PASSWORD")
-	viper.BindEnv("redis.channels.inbound", "WSGATEWAY_REDIS_INBOUND_CHANNEL")
-	viper.BindEnv("redis.channels.outbound", "WSGATEWAY_REDIS_OUTBOUND_CHANNEL")
+	// Broker
+	viper.BindEnv("broker.type", "WSGATEWAY_BROKER_TYPE")
+	viper.BindEnv("broker.redis.address", "WSGATEWAY_REDIS_ADDRESS")
+	viper.BindEnv("broker.redis.password", "WSGATEWAY_REDIS_PASSWORD")
+	viper.BindEnv("broker.redis.channels.inbound", "WSGATEWAY_REDIS_INBOUND_CHANNEL")
+	viper.BindEnv("broker.redis.channels.outbound", "WSGATEWAY_REDIS_OUTBOUND_CHANNEL")
+	viper.BindEnv("broker.kafka.brokers", "WSGATEWAY_KAFKA_BROKERS")
+	viper.BindEnv("broker.kafka.groupID", "WSGATEWAY_KAFKA_GROUPID")
 
 	// WebSocket
 	viper.BindEnv("websocket.maxConnections", "WSGATEWAY_MAX_CONNECTIONS")

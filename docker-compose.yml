@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 
 services:
   redis:
@@ -7,36 +7,58 @@ services:
       - "6379:6379"
     networks:
       - websocket-net
-    # command: >
-    #   --requirepass devpass
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    networks:
+      - websocket-net
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.0
+    networks:
+      - websocket-net
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
 
   # pooler:
-  #   build: ./pooler
+  #   build: .
   #   ports:
   #     - "8080:8080"
-  #   # labels:
-  #   #   - "traefik.http.routers.pooler.rule=Host(`localhost`)"
   #   depends_on:
   #     - redis
+  #     - kafka
   #   networks:
   #     - websocket-net
-  #
+  #   environment:
+      # --- Option 1: Use Redis as the broker ---
+      # WSGATEWAY_BROKER_TYPE: "redis"
+      # WSGATEWAY_REDIS_ADDRESS: "redis:6379"
+
+      # --- Option 2: Use Kafka as the broker ---
+      # NOTE: The session store will still use Redis.
+      # WSGATEWAY_BROKER_TYPE: "kafka"
+      # WSGATEWAY_KAFKA_BROKERS: "kafka:29092"
+      # WSGATEWAY_REDIS_ADDRESS: "redis:6379" # For session store
+
   # backend:
   #   build: ./backend
   #   depends_on:
   #     - redis
-  #   networks:
-  #     - websocket-net
-
-  # traefik:
-  #   image: traefik:v2.5
-  #   command:
-  #     - "--providers.docker=true"
-  #     - "--entrypoints.web.address=:80"
-  #   ports:
-  #     - "80:80"
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - kafka
   #   networks:
   #     - websocket-net
 

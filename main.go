@@ -6,15 +6,16 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/abdelmounim-dev/websocket-pooler/broker"
 	"github.com/abdelmounim-dev/websocket-pooler/config"
 	"github.com/abdelmounim-dev/websocket-pooler/server"
-	"github.com/abdelmounim-dev/websocket-pooler/services"
 	"github.com/abdelmounim-dev/websocket-pooler/session"
 	"github.com/abdelmounim-dev/websocket-pooler/websocket"
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 )
 
@@ -32,26 +33,47 @@ func main() {
 		log.Fatalf("Failed to initialize config: %v", err)
 	}
 	cfg := config.Get()
+
 	// Generate a unique ID for this server instance
 	serverID := uuid.New().String()
 	log.Printf("Starting server instance with ID: %s", serverID)
 
-	// TODO: separate Redis client creation and session store initialization and broker in some way make client singleton
-	// Create Redis Client
-	redisClient, err := services.NewRedisClient(cfg.Redis.Address, cfg.Redis.Password, cfg.Redis.DB, cfg.Redis.PoolSize, cfg.Redis.PoolTimeout)
-	if err != nil {
-		log.Fatalf("Failed to create Redis client: %v", err)
+	// Session Store always uses Redis in this architecture.
+	// Create the Redis client for the session store.
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     cfg.Broker.Redis.Address,
+		Password: cfg.Broker.Redis.Password,
+		DB:       cfg.Broker.Redis.DB,
+		PoolSize: cfg.Broker.Redis.PoolSize,
+	})
+	if err := redisClient.Ping(context.Background()).Err(); err != nil {
+		log.Fatalf("Failed to connect to Redis for session store: %v", err)
 	}
+	defer redisClient.Close()
 
 	// Create session store
 	sessionStore := session.NewRedisStore(redisClient, time.Duration(cfg.WebSocket.SessionTTL)*time.Second)
 
-	// Create message broker
-	messageBroker, err := broker.NewRedisBroker(cfg.Redis.Address, cfg.Redis.Password)
-	if err != nil {
-		log.Fatalf("Failed to create Redis broker: %v", err)
+	// --- Dynamic Broker Initialization ---
+	var messageBroker broker.MessageBroker
+	var err error
+
+	log.Printf("Initializing message broker of type: %s", cfg.Broker.Type)
+	switch strings.ToLower(cfg.Broker.Type) {
+	case "redis":
+		// The Redis broker can re-use the same client as the session store.
+		messageBroker = broker.NewRedisBroker(redisClient)
+	case "kafka":
+		messageBroker, err = broker.NewKafkaBroker(cfg.Broker.Kafka.Brokers, cfg.Broker.Kafka.GroupID)
+		if err != nil {
+			log.Fatalf("Failed to create Kafka broker: %v", err)
+		}
+	default:
+		// This should be caught by config validation, but we check again as a safeguard.
+		log.Fatalf("Invalid broker type specified: %s", cfg.Broker.Type)
 	}
 	defer messageBroker.Close()
+	// --- End of Broker Initialization ---
 
 	// Create client manager
 	clientManager := websocket.NewClientManager(sessionStore, serverID)

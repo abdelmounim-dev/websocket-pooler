@@ -23,19 +23,10 @@ type RedisBroker struct {
 }
 
 // NewRedisBroker creates a new Redis message broker
-func NewRedisBroker(addr string, password string) (*RedisBroker, error) {
-	options := &redis.Options{Addr: addr, Password: password}
-	client := redis.NewClient(options)
-
-	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := client.Ping(ctx).Err(); err != nil {
-		return nil, fmt.Errorf("redis connection failed: %w", err)
+func NewRedisBroker(client *redis.Client) MessageBroker {
+	return &RedisBroker{
+		client: client,
 	}
-
-	return &RedisBroker{client: client}, nil
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler interface
