@@ -12,6 +12,15 @@ func (c *AppConfig) Validate() error {
 	if c.Server.Port < 1 || c.Server.Port > 65535 {
 		return errors.New("invalid server port")
 	}
+	// Validate auth config
+	if c.Auth.Enabled {
+		if c.Auth.JWTSecret == "" || c.Auth.JWTSecret == "default-secret" {
+			return errors.New("auth.jwtSecret must be set to a strong secret when auth is enabled")
+		}
+		if c.Auth.TokenQueryParam == "" {
+			return errors.New("auth.tokenQueryParam must be configured when auth is enabled")
+		}
+	}
 
 	// Validate broker configuration
 	switch strings.ToLower(c.Broker.Type) {
@@ -55,6 +64,12 @@ func (c *AppConfig) Validate() error {
 func bindEnvVars() {
 	// Server
 	viper.BindEnv("server.port", "WSGATEWAY_PORT")
+
+	// Auth
+	viper.BindEnv("auth.enabled", "WSGATEWAY_AUTH_ENABLED")
+	viper.BindEnv("auth.jwtSecret", "WSGATEWAY_AUTH_JWT_SECRET")
+	viper.BindEnv("auth.tokenQueryParam", "WSGATEWAY_AUTH_TOKEN_PARAM")
+	viper.BindEnv("auth.revocationListKey", "WSGATEWAY_AUTH_REVOCATION_KEY")
 
 	// Broker
 	viper.BindEnv("broker.type", "WSGATEWAY_BROKER_TYPE")

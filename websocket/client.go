@@ -2,6 +2,8 @@ package websocket
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +23,7 @@ type ClientSession struct {
 	conn          *websocket.Conn
 	ctx           context.Context
 	cfg           *config.WebSocketConfig
+	claims        *CustomClaims // Add this to store JWT claims
 	lastActivity  atomic.Int64
 	pingTicker    *time.Ticker
 	activityTimer *time.Timer
@@ -29,17 +32,46 @@ type ClientSession struct {
 }
 
 // NewClientSession creates a new client session
-func NewClientSession(id string, conn *websocket.Conn, cfg *config.WebSocketConfig) *ClientSession {
+func NewClientSession(id string, conn *websocket.Conn, cfg *config.WebSocketConfig, claims *CustomClaims) *ClientSession {
 	ctx, cancel := context.WithCancel(context.Background())
 	cs := &ClientSession{
 		ID:     id,
 		conn:   conn,
 		cfg:    cfg,
+		claims: claims, // Set claims on creation
 		cancel: cancel,
 		ctx:    ctx,
 	}
 	cs.lastActivity.Store(time.Now().Unix())
 	return cs
+}
+
+// CanAccess checks if the client's JWT scopes permit a certain action on a channel.
+// Scopes are expected to be in the format "action:channel_pattern".
+// e.g., "publish:user.*", "subscribe:updates"
+func (s *ClientSession) CanAccess(action, channel string) bool {
+	// If auth is disabled, claims will be nil. Default to allow.
+	if s.claims == nil {
+		return true
+	}
+
+	requiredScope := fmt.Sprintf("%s:%s", action, channel)
+
+	for _, scope := range s.claims.Scopes {
+		// Simple wildcard check (e.g., "publish:user.*" matches "publish:user.123")
+		if strings.HasSuffix(scope, ".*") {
+			prefix := strings.TrimSuffix(scope, ".*")
+			// The required scope must start with the same action and channel prefix
+			if strings.HasPrefix(requiredScope, prefix) {
+				return true
+			}
+		}
+		// Exact match
+		if scope == requiredScope {
+			return true
+		}
+	}
+	return false
 }
 
 // SafeWriteJSON writes data to the websocket with retry capability

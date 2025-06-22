@@ -11,6 +11,14 @@ type AppConfig struct {
 	Server    ServerConfig
 	Broker    BrokerConfig // Changed from Redis to Broker
 	WebSocket WebSocketConfig
+	Auth      AuthConfig
+}
+
+type AuthConfig struct {
+	Enabled           bool   `mapstructure:"enabled"`
+	JWTSecret         string `mapstructure:"jwtSecret"`
+	TokenQueryParam   string `mapstructure:"tokenQueryParam"`
+	RevocationListKey string `mapstructure:"revocationListKey"`
 }
 
 type ServerConfig struct {

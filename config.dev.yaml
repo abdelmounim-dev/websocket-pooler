@@ -3,6 +3,13 @@ server:
   readTimeout: 15
   writeTimeout: 15
 
+auth:
+  enabled: false
+  # IMPORTANT: Use a strong, randomly generated secret and manage it securely (e.g., via environment variables or a vault).
+  jwtSecret: "AyAPpHYGt5aQ32uB"
+  tokenQueryParam: "token"
+  revocationListKey: "dev:jwt:revoked"
+
 broker:
   type: "redis"
   redis:

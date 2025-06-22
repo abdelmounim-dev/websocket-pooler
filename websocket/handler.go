@@ -2,7 +2,9 @@ package websocket
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -27,51 +29,82 @@ var upgrader = websocket.Upgrader{
 
 // Handler manages websocket connections and message routing
 type Handler struct {
-	manager *ClientManager
-	broker  broker.MessageBroker
+	manager      *ClientManager
+	broker       broker.MessageBroker
+	jwtValidator *JWTValidator      // Add validator
+	authConfig   *config.AuthConfig // Add auth config
 }
 
 // NewHandler creates a new websocket handler
-func NewHandler(manager *ClientManager, broker broker.MessageBroker) *Handler {
+func NewHandler(manager *ClientManager, broker broker.MessageBroker, jwtValidator *JWTValidator, authConfig *config.AuthConfig) *Handler {
 	return &Handler{
-		manager: manager,
-		broker:  broker,
+		manager:      manager,
+		broker:       broker,
+		jwtValidator: jwtValidator,
+		authConfig:   authConfig,
 	}
 }
 
 // HandleWebSocket handles incoming websocket connections
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	var claims *CustomClaims
+	var err error
+
+	// --- Handshake Authentication ---
+	if h.authConfig.Enabled {
+		if h.jwtValidator == nil {
+			log.Printf("Auth Error: Auth is enabled but JWT validator is not initialized.")
+			http.Error(w, "Internal server configuration error", http.StatusInternalServerError)
+			return
+		}
+
+		tokenString := r.URL.Query().Get(h.authConfig.TokenQueryParam)
+		if tokenString == "" {
+			log.Printf("Auth Error: Missing token in request from %s", r.RemoteAddr)
+			http.Error(w, "Missing authentication token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, err = h.jwtValidator.ValidateToken(r.Context(), tokenString)
+		if err != nil {
+			log.Printf("Auth Error: Invalid token from %s. Reason: %v", r.RemoteAddr, err)
+			http.Error(w, "Invalid authentication token", http.StatusUnauthorized)
+			return
+		}
+		log.Printf("Client authenticated successfully. Subject: %s", claims.Subject)
+	}
+	// --- End Handshake Authentication ---
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
 		return
 	}
 
-	// Generate a unique client ID
-	clientID := uuid.New().String()
+	// Use subject from JWT as clientID if available, otherwise generate a new one.
+	var clientID string
+	if claims != nil && claims.Subject != "" {
+		clientID = claims.Subject
+	} else {
+		clientID = uuid.New().String()
+	}
 
-	// Create a new client session
-	session := NewClientSession(clientID, conn, &config.Get().WebSocket)
+	// Create a new client session, passing claims
+	session := NewClientSession(clientID, conn, &config.Get().WebSocket, claims)
 	session.StartTimers()
 
-	// Add client to manager (which handles in-memory and persistent storage)
+	// Add client to manager
 	if err := h.manager.AddClient(r.Context(), session); err != nil {
 		conn.Close()
 		return
 	}
-
-	// Defer cleanup for when this function returns (i.e., connection closes)
 	defer h.manager.RemoveClient(clientID)
-
-	// Configure pong handler
 	conn.SetPongHandler(session.GetPongHandler())
 
-	// Send client ID to client
+	// Send client ID to client for reference
 	if err := session.SafeWriteJSON(map[string]string{"client_id": clientID}); err != nil {
 		log.Printf("Failed to send client ID: %v", err)
-		conn.Close()
-		// defer will handle the cleanup
-		return
+		return // defer will handle cleanup
 	}
 
 	// Read messages from client
@@ -84,32 +117,45 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 			break
 		}
-
-		// Update activity timestamp on the client session
 		session.UpdateActivity()
 
-		// Refresh session TTL in Redis
+		// --- Channel Access Control ---
+		if h.authConfig.Enabled {
+			var req struct {
+				Action  string `json:"action"`
+				Channel string `json:"channel"`
+			}
+			// Best-effort unmarshal to check for action/channel based auth.
+			if json.Unmarshal(msg, &req) == nil && req.Action != "" && req.Channel != "" {
+				if !session.CanAccess(req.Action, req.Channel) {
+					log.Printf("Authorization DENIED for client %s: action '%s' on channel '%s'", clientID, req.Action, req.Channel)
+					session.SafeWriteJSON(map[string]string{
+						"error":   "forbidden",
+						"details": fmt.Sprintf("action '%s' on channel '%s' not allowed", req.Action, req.Channel),
+					})
+					continue // Do not process or forward the unauthorized message
+				}
+			}
+		}
+		// --- End Channel Access Control ---
+
 		h.manager.RefreshSessionTTL(r.Context(), clientID)
 
 		// Forward message to backend
 		h.manager.IncreaseWaitGroup()
 		go func() {
 			defer h.manager.DecreaseWaitGroup()
-
 			ctxTimeout, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 			defer cancel()
-
-			// The message broker needs the serverID
 			if err := h.broker.Publish(ctxTimeout, BackendRequestsChannel, broker.Message{
 				ClientID: clientID,
-				ServerID: h.manager.serverID, // Get serverID from manager
+				ServerID: h.manager.serverID,
 				Data:     string(msg),
 			}); err != nil {
 				log.Printf("Failed to publish message for client %s: %v", clientID, err)
 			}
 		}()
 	}
-	// No explicit cleanup here, defer handles it.
 }
 
 // ListenForResponses listens for messages from backend and routes them to clients

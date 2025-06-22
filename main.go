@@ -75,11 +75,21 @@ func main() {
 	defer messageBroker.Close()
 	// --- End of Broker Initialization ---
 
+	// Auth Initialization
+	var jwtValidator *websocket.JWTValidator
+	if cfg.Auth.Enabled {
+		jwtValidator = websocket.NewJWTValidator(&cfg.Auth, redisClient)
+		log.Println("JWT Authentication is ENABLED.")
+	} else {
+		log.Println("JWT Authentication is DISABLED.")
+	}
+	// --- End of Auth Initialization ---
+
 	// Create client manager
 	clientManager := websocket.NewClientManager(sessionStore, serverID)
 
 	// Initialize handlers
-	handler := websocket.NewHandler(clientManager, messageBroker)
+	handler := websocket.NewHandler(clientManager, messageBroker, jwtValidator, &cfg.Auth)
 
 	// Create and configure server
 	port := ":" + strconv.Itoa(cfg.Server.Port)

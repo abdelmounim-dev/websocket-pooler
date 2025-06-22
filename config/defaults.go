@@ -8,6 +8,12 @@ func setDefaults() {
 	viper.SetDefault("server.readTimeout", 15)
 	viper.SetDefault("server.writeTimeout", 15)
 
+	// Auth
+	viper.SetDefault("auth.enabled", false) // Default to off for security
+	viper.SetDefault("auth.jwtSecret", "default-secret")
+	viper.SetDefault("auth.tokenQueryParam", "token")
+	viper.SetDefault("auth.revocationListKey", "jwt:revoked")
+
 	// Redis
 	viper.SetDefault("redis.address", "localhost:6379")
 	viper.SetDefault("redis.db", 0)
