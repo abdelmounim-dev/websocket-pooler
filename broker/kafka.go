@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"github.com/abdelmounim-dev/websocket-pooler/metrics"
 	"sync"
 	"time"
 

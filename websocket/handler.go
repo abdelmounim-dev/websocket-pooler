@@ -116,6 +116,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				!errors.Is(err, net.ErrClosed) {
 				log.Printf("Read error from client %s: %v", clientID, err)
 			}
+			session.Close(websocket.CloseNormalClosure, "Client disconnected")
 			break
 		}
 		metrics.MessagesReceived.Inc()

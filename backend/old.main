@@ -1,0 +1,107 @@
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"log"
+	"time"
+
+	"github.com/go-redis/redis/v8"
+)
+
+// Message struct MUST match the broker's message structure.
+type Message struct {
+	ClientID string      `json:"client_id"`
+	ServerID string      `json:"server_id"`
+	Data     interface{} `json:"data"`
+}
+
+// Session struct represents the data stored in Redis for each client session.
+// It must match the structure saved by the pooler's session.RedisStore.
+type Session struct {
+	ClientID    string    `json:"client_id"`
+	ServerID    string    `json:"server_id"`
+	ConnectedAt time.Time `json:"connected_at"`
+}
+
+// MarshalBinary implements the encoding.BinaryMarshaler interface for Redis.
+func (m Message) MarshalBinary() ([]byte, error) {
+	return json.Marshal(m)
+}
+
+// UnmarshalBinary implements the encoding.BinaryUnmarshaler interface for Redis.
+func (m *Message) UnmarshalBinary(data []byte) error {
+	return json.Unmarshal(data, m)
+}
+
+func main() {
+	rdb := redis.NewClient(&redis.Options{Addr: "redis:6379"})
+	ctx := context.Background()
+
+	pubsub := rdb.Subscribe(ctx, "backend-requests")
+	defer pubsub.Close()
+
+	log.Println("Test backend started. Listening for requests...")
+
+	for msg := range pubsub.Channel() {
+		var request Message
+		if err := json.Unmarshal([]byte(msg.Payload), &request); err != nil {
+			log.Printf("Error decoding request: %v", err)
+			continue
+		}
+
+		log.Printf("Received message from client %s (via server %s): %v", request.ClientID, request.ServerID, request.Data)
+
+		// --- BROADCAST LOGIC ---
+
+		// 1. Find all clients connected to the same server.
+		var recipients []Session
+		iter := rdb.Scan(ctx, 0, "session:*", 0).Iterator()
+		for iter.Next(ctx) {
+			key := iter.Val()
+			data, err := rdb.Get(ctx, key).Result()
+			if err != nil {
+				log.Printf("Error getting session for key %s: %v", key, err)
+				continue
+			}
+
+			var session Session
+			if err := json.Unmarshal([]byte(data), &session); err != nil {
+				log.Printf("Error unmarshaling session for key %s: %v", key, err)
+				continue
+			}
+
+			// Add to recipients list if the server ID matches
+			if session.ServerID == request.ServerID {
+				recipients = append(recipients, session)
+			}
+		}
+		if err := iter.Err(); err != nil {
+			log.Printf("Error scanning session keys: %v", err)
+			continue
+		}
+
+		log.Printf("Found %d clients on server %s. Broadcasting...", len(recipients), request.ServerID)
+
+		// 2. Create the broadcast payload.
+		broadcastPayload := map[string]interface{}{
+			"broadcast_from_client": request.ClientID,
+			"original_message":      request.Data,
+			"processed_at":          time.Now().Unix(),
+		}
+
+		// 3. Publish a message to each recipient.
+		for _, recipient := range recipients {
+			responseMsg := Message{
+				ClientID: recipient.ClientID, // Target the specific client
+				ServerID: recipient.ServerID, // Route via their server
+				Data:     broadcastPayload,
+			}
+
+			err := rdb.Publish(ctx, "backend-responses", responseMsg).Err()
+			if err != nil {
+				log.Printf("Error broadcasting to client %s: %v", recipient.ClientID, err)
+			}
+		}
+	}
+}

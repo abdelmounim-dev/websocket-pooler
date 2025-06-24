@@ -21,7 +21,7 @@ broker:
     address: "localhost:6379"
     password: ""
     db: 0
-    poolSize: 200
+    poolSize: 1000
     channels:
       inbound: "dev:ws:inbound"
       outbound: "dev:ws:outbound"
@@ -34,8 +34,12 @@ broker:
 websocket:
   maxConnections: 10000
   messageSizeLimit: 4096
-  pingInterval: 5
+  handshakeTimeout: 10   # ADDED: Max time in seconds for the initial WebSocket handshake to complete.
+  pingInterval: 5        # Time in seconds between server-sent ping messages.
+  pongTimeout: 10        # ADDED: Max time in seconds to wait for a pong response from the client. Should be > pingInterval.
+  activityTimeout: 3600  # Time in seconds of client inactivity before the connection is closed. (1 hour)
+  writeTimeout: 5        # ADDED: Max time in seconds allowed for a single write operation to the client.
   reconnectBackoff: 500
   maxRetries: 3
-  activityTimeout: 10
   keepAlive: true
+  sessionTTL: 3660       # ADDED: Time in seconds for the session to live in Redis. It MUST be greater than activityTimeout.

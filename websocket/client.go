@@ -29,6 +29,7 @@ type ClientSession struct {
 	activityTimer *time.Timer
 	cancel        context.CancelFunc
 	mu            sync.Mutex
+	closeOnce     sync.Once
 }
 
 // NewClientSession creates a new client session
@@ -189,33 +190,37 @@ func (s *ClientSession) GetPongHandler() func(string) error {
 	}
 }
 
-// Close closes the websocket connection
+// Close closes the websocket connection idempotently.
 func (s *ClientSession) Close(code int, text string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.closeOnce.Do(func() {
+		// This entire block of code will now run exactly once.
+		s.mu.Lock()
+		defer s.mu.Unlock()
 
-	// Stop timers
-	if s.pingTicker != nil {
-		s.pingTicker.Stop()
-	}
-	if s.activityTimer != nil {
-		s.activityTimer.Stop()
-	}
+		// Stop timers
+		if s.pingTicker != nil {
+			s.pingTicker.Stop()
+		}
+		if s.activityTimer != nil {
+			s.activityTimer.Stop()
+		}
 
-	// Cancel context
-	if s.cancel != nil {
-		s.cancel()
-	}
+		// Cancel context to signal all goroutines to stop
+		if s.cancel != nil {
+			s.cancel()
+		}
 
-	writeTimeout := time.Duration(s.cfg.WriteTimeout) * time.Second
-	err := s.conn.WriteControl(
-		websocket.CloseMessage,
-		websocket.FormatCloseMessage(code, text),
-		time.Now().Add(writeTimeout),
-	)
-	if err != nil {
-		log.Printf("Error sending close message: %v", err)
-	}
+		writeTimeout := time.Duration(s.cfg.WriteTimeout) * time.Second
+		// Attempt to send the close message but do not log the specific "close sent" error,
+		// as it's an expected outcome of a race condition where the client closes first.
+		_ = s.conn.WriteControl(
+			websocket.CloseMessage,
+			websocket.FormatCloseMessage(code, text),
+			time.Now().Add(writeTimeout),
+		)
 
-	return s.conn.Close()
+		// Finally, close the underlying connection.
+		s.conn.Close()
+	})
+	return nil
 }

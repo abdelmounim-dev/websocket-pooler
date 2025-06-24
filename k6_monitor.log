@@ -1,0 +1,8 @@
+
+         /\      Grafana   /‾‾/  
+    /\  /  \     |\  __   /  /   
+   /  \/    \    | |/ /  /   ‾‾\ 
+  /          \   |   (  |  (‾)  |
+ / __________ \  |_|\_\  \_____/ 
+
+time="2025-06-22T19:00:29+01:00" level=error msg="GoError: metric 'ws_session_duration' already exists but with a value type time, instead of default\n\tat file:///home/ab/ws-pooler/tests/load/load_test.js:11:27(24)\n" hint="script exception"
