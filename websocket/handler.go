@@ -142,23 +142,23 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		// --- End Channel Access Control ---
 
-		h.manager.RefreshSessionTTL(r.Context(), clientID)
+		
 
 		// Forward message to backend
 		h.manager.IncreaseWaitGroup()
-		go func() {
+		go func(s *ClientSession, messageData []byte) {
 			defer h.manager.DecreaseWaitGroup()
 			ctxTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := h.broker.Publish(ctxTimeout, BackendRequestsChannel, broker.Message{
-
-				ClientID: clientID,
+				ClientID: s.ID,
 				ServerID: h.manager.serverID,
-				Data:     string(msg),
+				Data:     string(messageData),
 			}); err != nil {
-				log.Printf("Failed to publish message for client %s: %v", clientID, err)
+				log.Printf("Failed to publish message for client %s: %v. Closing connection.", s.ID, err)
+				s.Close(websocket.CloseInternalServerErr, "Failed to process message")
 			}
-		}()
+		}(session, msg)
 		metrics.BrokerMessagesPublished.WithLabelValues(h.broker.Type()).Inc()
 	}
 }
