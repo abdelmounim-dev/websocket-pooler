@@ -116,9 +116,10 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				!errors.Is(err, net.ErrClosed) {
 				log.Printf("Read error from client %s: %v", clientID, err)
 			}
-			session.Close(websocket.CloseNormalClosure, "Client disconnected")
+			session.Close(websocket.CloseNormalClosure, "Client disconnected on read error")
 			break
 		}
+		log.Printf("Message received from client %s: %s", clientID, string(msg))
 		metrics.MessagesReceived.Inc()
 		session.UpdateActivity()
 
@@ -148,7 +149,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		h.manager.IncreaseWaitGroup()
 		go func(s *ClientSession, messageData []byte) {
 			defer h.manager.DecreaseWaitGroup()
-			ctxTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			ctxTimeout, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			if err := h.broker.Publish(ctxTimeout, BackendRequestsChannel, broker.Message{
 				ClientID: s.ID,
@@ -184,6 +185,8 @@ func (h *Handler) ListenForResponses(ctx context.Context) {
 			if message.ServerID != h.manager.serverID {
 				continue
 			}
+
+			log.Printf("Message received from broker for client %s", message.ClientID)
 
 			clientID := message.ClientID
 

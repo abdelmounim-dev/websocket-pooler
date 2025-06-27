@@ -35,7 +35,7 @@ func setDefaults() {
 	viper.SetDefault("websocket.pingInterval", 25)
 	viper.SetDefault("websocket.pongTimeout", 30)
 	viper.SetDefault("websocket.activityTimeout", 60)
-	viper.SetDefault("websocket.writeTimeout", 5)
+	viper.SetDefault("websocket.writeTimeout", 10)
 	viper.SetDefault("websocket.keepAlive", true)
 	viper.SetDefault("websocket.sessionTTL", 90)
 

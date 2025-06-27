@@ -46,7 +46,7 @@ func (m *ClientManager) AddClient(ctx context.Context, clientSession *ClientSess
 	m.clients.Store(clientSession.ID, clientSession)
 	metrics.ActiveConnections.Inc()
 	metrics.TotalConnections.Inc()
-	log.Printf("Client %s connected to server %s", clientSession.ID, m.serverID)
+	log.Printf("Client %s connected to server %s and session created in Redis", clientSession.ID, m.serverID)
 	return nil
 }
 
@@ -61,7 +61,7 @@ func (m *ClientManager) RemoveClient(clientID string) {
 		log.Printf("Failed to delete session from store for client %s: %v", clientID, err)
 	}
 	metrics.ActiveConnections.Dec()
-	log.Printf("Client %s disconnected", clientID)
+	log.Printf("Client %s disconnected and session deleted from Redis", clientID)
 }
 
 // GetClient retrieves a live client connection by ID from the in-memory map.

@@ -193,6 +193,8 @@ func (s *ClientSession) GetPongHandler() func(string) error {
 // Close closes the websocket connection idempotently.
 func (s *ClientSession) Close(code int, text string) error {
 	s.closeOnce.Do(func() {
+		log.Printf("Closing connection for client %s: code=%d, reason='%s'", s.ID, code, text)
+
 		// This entire block of code will now run exactly once.
 		s.mu.Lock()
 		defer s.mu.Unlock()

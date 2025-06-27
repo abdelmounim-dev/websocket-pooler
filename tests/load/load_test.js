@@ -4,8 +4,8 @@ import { check, sleep } from "k6";
 import { Counter } from "k6/metrics";
 
 // Configuration
-const wsUrl = "ws://localhost:8080/ws";
-const sessionDuration = 60000; // Sessions will last for 60 seconds
+const wsUrl = "ws://192.168.49.2:31098/ws";
+const sessionDuration = 1500000; // Sessions will last for 25 minutes
 const messageInterval = 3; // seconds between messages
 
 // Custom Metrics
@@ -14,9 +14,9 @@ const wsConnectionErrors = new Counter("ws_connection_errors");
 export const options = {
   // Define stages for a test targeting 500 concurrent connections.
   stages: [
-    { duration: "2m", target: 500 }, // Ramp up to 500 users over 2 minutes
-    { duration: "5m", target: 500 }, // Hold at 500 users for 5 minutes to observe stability
-    { duration: "1m", target: 0 }, // Ramp down gracefully
+    { duration: "5m", target: 10000 }, // Ramp up to 10000 users over 5 minutes
+    { duration: "15m", target: 10000 }, // Hold at 10000 users for 15 minutes
+    { duration: "2m", target: 0 }, // Ramp down gracefully
   ],
   thresholds: {
     ws_session_duration: [`p(95)<${sessionDuration + 2000}`],

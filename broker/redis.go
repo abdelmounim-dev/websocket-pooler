@@ -48,7 +48,16 @@ func (m *Message) UnmarshalBinary(data []byte) error {
 // Publish sends a message to the specified channel with retry capability
 func (b *RedisBroker) Publish(ctx context.Context, channel string, message Message) error {
 	operation := func() error {
-		return b.client.Publish(ctx, channel, message).Err()
+		startTime := time.Now()
+		err := b.client.Publish(ctx, channel, message).Err()
+		duration := time.Since(startTime)
+
+		// Log if the operation is slower than a certain threshold
+		if duration > 100*time.Millisecond {
+			log.Printf("Slow Redis publish for client %s to channel %s took %s", message.ClientID, channel, duration)
+		}
+
+		return err
 	}
 
 	backoffStrategy := backoff.WithContext(
@@ -112,5 +121,5 @@ func (b *RedisBroker) Subscribe(ctx context.Context, channel string) (<-chan Mes
 
 // Close cleans up resources
 func (b *RedisBroker) Close() error {
-	return b.client.Close()
+	return nil
 }
