@@ -12,10 +12,11 @@ import (
 
 	"github.com/abdelmounim-dev/websocket-pooler/broker"
 	"github.com/abdelmounim-dev/websocket-pooler/config"
-	"github.com/abdelmounim-dev/websocket-pooler/server"
 	"github.com/abdelmounim-dev/websocket-pooler/metrics"
+	"github.com/abdelmounim-dev/websocket-pooler/server"
 	"github.com/abdelmounim-dev/websocket-pooler/session"
 	"github.com/abdelmounim-dev/websocket-pooler/websocket"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 )
@@ -46,14 +47,38 @@ func main() {
 
 	// Session Store always uses Redis in this architecture.
 	// Create the Redis client for the session store.
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.Broker.Redis.Address,
-		Password: cfg.Broker.Redis.Password,
-		DB:       cfg.Broker.Redis.DB,
-		PoolSize: cfg.Broker.Redis.PoolSize,
-	})
-	if err := redisClient.Ping(context.Background()).Err(); err != nil {
-		log.Fatalf("Failed to connect to Redis for session store: %v", err)
+	var redisClient *redis.Client
+
+	// Define the operation to connect to Redis
+	connectToRedis := func() error {
+		log.Printf("Attempting to connect to Redis at %s...", cfg.Broker.Redis.Address)
+		client := redis.NewClient(&redis.Options{
+			Addr:     cfg.Broker.Redis.Address,
+			Password: cfg.Broker.Redis.Password,
+			DB:       cfg.Broker.Redis.DB,
+			PoolSize: cfg.Broker.Redis.PoolSize,
+		})
+
+		// Ping to check the connection
+		if err := client.Ping(context.Background()).Err(); err != nil {
+			log.Printf("Failed to ping Redis: %v. Retrying...", err)
+			return err // Important: return the error to trigger a retry
+		}
+
+		log.Println("Successfully connected to Redis.")
+		redisClient = client // Assign the successful client to the outer scope variable
+		return nil           // Success
+	}
+
+	// Create an exponential backoff strategy
+	bo := backoff.NewExponentialBackOff()
+	bo.MaxElapsedTime = 2 * time.Minute // Stop retrying after 2 minutes
+
+	// Retry the connection
+	err := backoff.Retry(connectToRedis, bo)
+	if err != nil {
+		// If it still fails after all retries, then exit
+		log.Fatalf("Could not connect to Redis after multiple retries: %v", err)
 	}
 	defer redisClient.Close()
 
@@ -62,7 +87,6 @@ func main() {
 
 	// --- Dynamic Broker Initialization ---
 	var messageBroker broker.MessageBroker
-	var err error
 
 	log.Printf("Initializing message broker of type: %s", cfg.Broker.Type)
 	switch strings.ToLower(cfg.Broker.Type) {

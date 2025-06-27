@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"os" // Imported the 'os' package
 	"time"
 
 	"github.com/go-redis/redis/v8"
@@ -35,8 +36,23 @@ func (m *Message) UnmarshalBinary(data []byte) error {
 	return json.Unmarshal(data, m)
 }
 
+// getEnv gets an environment variable or returns a default value.
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
+
 func main() {
-	rdb := redis.NewClient(&redis.Options{Addr: "redis:6379"})
+	// --- MODIFIED SECTION ---
+	// Get Redis address from environment variable, with a fallback.
+	redisAddr := getEnv("REDIS_ADDRESS", "localhost:6379")
+	log.Printf("Connecting to Redis at %s", redisAddr)
+
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	// --- END MODIFIED SECTION ---
+
 	ctx := context.Background()
 
 	pubsub := rdb.Subscribe(ctx, "backend-requests")

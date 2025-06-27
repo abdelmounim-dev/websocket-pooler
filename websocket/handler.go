@@ -148,7 +148,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		h.manager.IncreaseWaitGroup()
 		go func() {
 			defer h.manager.DecreaseWaitGroup()
-			ctxTimeout, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+			ctxTimeout, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if err := h.broker.Publish(ctxTimeout, BackendRequestsChannel, broker.Message{
 

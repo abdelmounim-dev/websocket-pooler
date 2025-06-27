@@ -1,0 +1,48 @@
+# ./config.prod.yaml
+server:
+  port: 8080 # This is the internal port the container listens on
+  readTimeout: 30
+  writeTimeout: 30
+
+metrics:
+  enabled: true
+  port: 9090
+  path: "/metrics"
+
+auth:
+  enabled: true # Let's assume production requires auth
+  # The JWT secret will be injected via an environment variable, not stored here.
+  # jwtSecret: "placeholder" 
+  tokenQueryParam: "token"
+  revocationListKey: "prod:jwt:revoked"
+
+broker:
+  type: "redis" # Or "kafka"
+  redis:
+    # Use the service name from docker-stack.yml
+    address: "redis:6379" 
+    password: ""
+    db: 0
+    poolSize: 1000
+    channels:
+      inbound: "prod:ws:inbound"
+      outbound: "prod:ws:outbound"
+      system: "prod:ws:system"
+      connection: "prod:ws:connections"
+  kafka:
+    # Use the internal advertised listener for Kafka
+    brokers: ["kafka:29092"] 
+    groupID: "websocket-pooler-prod"
+
+websocket:
+  maxConnections: 10000
+  messageSizeLimit: 4096
+  handshakeTimeout: 10
+  pingInterval: 25
+  pongTimeout: 30
+  activityTimeout: 3600
+  writeTimeout: 10
+  reconnectBackoff: 500
+  maxRetries: 3
+  keepAlive: true
+  sessionTTL: 3660

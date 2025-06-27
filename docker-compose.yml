@@ -87,6 +87,10 @@ services:
       - kafka
     networks:
       - websocket-net
+    # --- ADDED SECTION ---
+    environment:
+      REDIS_ADDRESS: "redis:6379"
+    # --- END ADDED SECTION ---
 
 networks:
   websocket-net:

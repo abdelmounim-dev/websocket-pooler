@@ -1,8 +1,12 @@
-# File: prometheus.yml
+# ./prometheus.yml (Updated for Swarm)
 global:
   scrape_interval: 15s
 
 scrape_configs:
   - job_name: 'websocket-pooler'
-    static_configs:
-      - targets: ['pooler:9090']
+    # Use dns_sd_configs for Swarm service discovery
+    dns_sd_configs:
+      - names:
+          - 'tasks.pooler' # This resolves to all IPs of the pooler service tasks
+        type: 'A'
+        port: 9090 # The metrics port

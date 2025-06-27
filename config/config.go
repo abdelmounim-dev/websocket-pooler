@@ -95,6 +95,7 @@ func Initialize(env string) error {
 		viper.SetConfigType("yaml")
 		viper.AddConfigPath("./configs")
 		viper.AddConfigPath(".")
+		viper.AddConfigPath("/app")
 
 		viper.AutomaticEnv()
 		viper.SetEnvPrefix("WSGATEWAY")
