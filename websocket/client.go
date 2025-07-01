@@ -222,6 +222,8 @@ func (s *ClientSession) Close(code int, text string) error {
 		)
 
 		// Finally, close the underlying connection.
+		// Add a small delay to allow the close frame to be sent and received.
+		time.Sleep(100 * time.Millisecond)
 		s.conn.Close()
 	})
 	return nil

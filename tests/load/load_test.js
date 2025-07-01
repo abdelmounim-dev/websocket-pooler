@@ -4,7 +4,7 @@ import { check, sleep } from "k6";
 import { Counter } from "k6/metrics";
 
 // Configuration
-const wsUrl = "ws://192.168.49.2:31098/ws";
+const wsUrl = "ws://localhost:8080/ws";
 const sessionDuration = 1500000; // Sessions will last for 25 minutes
 const messageInterval = 3; // seconds between messages
 
